@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(cd \"R:\\\\dev\\\\repos\\\\junon\\\\arbol\"; Get-ChildItem -Recurse -Force | Where-Object { $_.PSIsContainer -eq $false } | Select-Object FullName)",
+      "PowerShell(\\(Get-ChildItem -Path \"R:\\\\dev\\\\repos\\\\junon\\\\arbol\" -File\\).Count; ls \"R:\\\\dev\\\\repos\\\\junon\\\\arbol\")",
+      "Bash(npm install *)"
+    ]
+  }
+}
