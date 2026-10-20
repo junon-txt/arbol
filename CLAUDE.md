@@ -42,9 +42,11 @@ Uses `import.meta.glob` with `{ as: 'raw', eager: true }` to load all `.md` file
 
 ### `src/utils/layout.js`
 
-`computeLayout(members)` auto-computes positions from parent relationships:
-1. **Generations** — topological sort: `gen[id] = max(gen[parent]) + 1`, roots at 0.
-2. **X positions** — tier by tier: each node placed at the average x of its parents (greedy, min-spacing 1 unit), then a centering correction shifts the whole tier so constrained nodes sit on their ideal average. Unconstrained nodes (no tree-parents) are placed right of constrained ones.
+`computeLayout(members)` auto-computes positions via two passes:
+1. **Pass 1 — subtree widths (bottom-up)**: each child is assigned to its first listed parent (*primary parent*). A node's `width` = number of leaf-slots its owned subtree occupies (leaves = 1, internal = sum of children widths). This gives every ancestor a horizontal reservation proportional to its descendants.
+2. **Pass 2 — x positions (top-down, per generation)**: nodes are sorted by average parent x, then placed greedily — each node occupies a block of `width` slot-units, starting at `max(preferred_x, prev_right_edge + w/2)`. A centering correction then shifts the whole tier so constrained nodes land on their ideal average. Unconstrained roots are placed sequentially by id.
+
+This guarantees no horizontal overlap regardless of tree depth, and arrows never skew sideways.
 
 `buildLines(positioned)` emits one cubic bezier per parent→child pair (parent circle bottom → child circle top).
 
