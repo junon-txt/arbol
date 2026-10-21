@@ -1,4 +1,4 @@
-import React, { useRef, useState, useCallback, useLayoutEffect } from 'react'
+import React, { useRef, useState, useCallback, useEffect, useLayoutEffect } from 'react'
 import PersonNode from './PersonNode.jsx'
 import { AVATAR } from '../utils/layout.js'
 
@@ -28,30 +28,39 @@ export default function TreeView({ members, lines, selected, onSelect }) {
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   /* ── Drag (pointer) ── */
+  // Touch is handled by the touch handlers below (they also do pinch), so ignore it here
   const onPointerDown = useCallback(e => {
-    if (e.target.closest('[data-person]')) return
+    if (e.pointerType === 'touch' || e.target.closest('[data-person]')) return
     e.currentTarget.setPointerCapture(e.pointerId)
     dragRef.current = { sx: e.clientX - tf.x, sy: e.clientY - tf.y }
   }, [tf])
 
   const onPointerMove = useCallback(e => {
-    if (!dragRef.current) return
-    setTf(t => ({ ...t, x: e.clientX - dragRef.current.sx, y: e.clientY - dragRef.current.sy }))
+    const drag = dragRef.current
+    if (!drag) return
+    // Read the ref now: the updater runs later, when a pointerup may already have cleared it
+    setTf(t => ({ ...t, x: e.clientX - drag.sx, y: e.clientY - drag.sy }))
   }, [])
 
   const onPointerUp = useCallback(() => { dragRef.current = null }, [])
 
   /* ── Wheel zoom ── */
-  const onWheel = useCallback(e => {
-    e.preventDefault()
-    const rect = wrapRef.current.getBoundingClientRect()
-    const ox = e.clientX - rect.left
-    const oy = e.clientY - rect.top
-    setTf(t => {
-      const next = Math.min(3, Math.max(0.2, t.scale * (e.deltaY > 0 ? 0.9 : 1.1)))
-      const r = next / t.scale
-      return { scale: next, x: ox - (ox - t.x) * r, y: oy - (oy - t.y) * r }
-    })
+  // Attached natively: React's wheel listener is passive, so preventDefault() there wouldn't stop page scroll
+  useEffect(() => {
+    const el = wrapRef.current
+    const onWheel = e => {
+      e.preventDefault()
+      const rect = el.getBoundingClientRect()
+      const ox = e.clientX - rect.left
+      const oy = e.clientY - rect.top
+      setTf(t => {
+        const next = Math.min(3, Math.max(0.2, t.scale * (e.deltaY > 0 ? 0.9 : 1.1)))
+        const r = next / t.scale
+        return { scale: next, x: ox - (ox - t.x) * r, y: oy - (oy - t.y) * r }
+      })
+    }
+    el.addEventListener('wheel', onWheel, { passive: false })
+    return () => el.removeEventListener('wheel', onWheel)
   }, [])
 
   /* ── Touch ── */
@@ -71,7 +80,9 @@ export default function TreeView({ members, lines, selected, onSelect }) {
       const next = Math.min(3, Math.max(0.2, touchRef.current.scale * (d / touchRef.current.dist)))
       setTf(t => ({ ...t, scale: next }))
     } else if (e.touches.length === 1 && dragRef.current) {
-      setTf(t => ({ ...t, x: e.touches[0].clientX - dragRef.current.sx, y: e.touches[0].clientY - dragRef.current.sy }))
+      const drag = dragRef.current
+      const { clientX, clientY } = e.touches[0]
+      setTf(t => ({ ...t, x: clientX - drag.sx, y: clientY - drag.sy }))
     }
   }, [])
 
@@ -80,12 +91,13 @@ export default function TreeView({ members, lines, selected, onSelect }) {
   return (
     <div
       ref={wrapRef}
-      className="w-full h-full overflow-hidden cursor-grab active:cursor-grabbing"
+      // relative: clip the canvas to this box; select-none: a drag must not start a text
+      // selection, which makes the browser auto-scroll the whole page out of view
+      className="relative w-full h-full overflow-hidden select-none cursor-grab active:cursor-grabbing"
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
       onPointerLeave={onPointerUp}
-      onWheel={onWheel}
       onTouchStart={onTouchStart}
       onTouchMove={onTouchMove}
       onTouchEnd={onTouchEnd}

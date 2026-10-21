@@ -10,35 +10,27 @@ npm run build    # production build → dist/
 npm run preview  # preview the build
 ```
 
+Requires `VITE_API_URL` in `.env.local` (see `.env.example`).
+
 ## Stack
 
 Vite + React 18 + Tailwind CSS v3 (`@tailwindcss/typography` for prose). No router — single-page with state-driven modal.
 
 ## Architecture
 
-**Data pipeline**: `src/assets/members/*/profile.md` → `familyData.js` → `layout.js` → React components.
+**Data pipeline**: Google Sheet `Miembros` tab → Apps Script web app (`apps-script/Code.gs`, `doGet`) → `src/utils/api.js` (`fetchMembers`, at runtime) → `familyData.js` (`toMember`) → `layout.js` → React components. No member data is bundled; the static site needs `VITE_API_URL` (the Apps Script `/exec` URL; `.env.local` locally, a repo variable in `.github/workflows/deploy.yml`).
 
-### Member files (`src/assets/members/<slug>/profile.md`)
+### Backend (`apps-script/Code.gs`)
 
-Required frontmatter fields only:
-
-```yaml
----
-id: short-id          # referenced in other files' parents arrays
-name: Full Name
-born: 1950            # number
-died: 2020            # number, omit if living
-parents: [id1, id2]   # IDs of parents present in the tree; [] for roots
----
-
-Bio text here (markdown).
-```
-
-Drop a `photo.jpg` (or `.png`/`.webp`) alongside `profile.md` to use a real photo; otherwise an auto-generated gradient avatar is shown.
+Bound to the spreadsheet, deployed as a web app ("Execute as: Me", "Anyone"); the sheet itself is private. Columns are looked up by header name (`FIELDS` maps API keys ↔ headers).
+- `doGet` → `{ ok, members: [{ id, firstName, middleName, lastName, fatherId, motherId, born, died, bio, photo }] }`
+- `doPost` body `{ action: 'verify' | 'update' | 'upload', code, ... }`. `upload` (`{ id, mimeType, data: base64 }`) stores the image in `PHOTOS_FOLDER_ID`, shares it view-only and returns its link; the client then saves that link via `update` so it lands in `Historial`. The client resizes to ≤1200px JPEG first (`api.js` `resizeToJpeg`). Codes come from the `Códigos` tab (`Activo` checkbox revokes). Each changed field is appended to `Historial`; ticking `Revertir` there runs the `onEdit` simple trigger, which restores the old value unless the field changed again since.
+- Values are written with a leading `'` so Sheets keeps dates as typed text.
+- Client POSTs use `Content-Type: text/plain` to avoid a CORS preflight.
 
 ### `src/utils/familyData.js`
 
-Uses `import.meta.glob` with `{ as: 'raw', eager: true }` to load all `.md` files and images at build time. Parses frontmatter with a small inline parser (no external dep). Images are resolved by matching filename against the member's directory.
+`toMember(raw)` derives `name`, `parents` (`[fatherId, motherId]`), `photo` (Drive link → `lh3.googleusercontent.com/d/<id>` URL) and keeps the raw link as `photoLink`. Parent IDs without their own row are allowed and skipped by the layout.
 
 ### `src/utils/layout.js`
 
@@ -54,5 +46,7 @@ This guarantees no horizontal overlap regardless of tree depth, and arrows never
 
 - `TreeView` — pan/zoom canvas (pointer + wheel + touch). Renders SVG line layer beneath absolutely-positioned `PersonNode`s.
 - `PersonNode` — circular avatar (photo or gradient+initials) + name + years. `data-person` attr prevents drag from firing on click.
-- `ProfileModal` — bottom-sheet on mobile, centered card on desktop. Cover strip, overlapping avatar, markdown bio via `marked`, family mini-avatars (parents / siblings / children) that navigate to each other.
-- `App` — owns `selected` state; wires tree ↔ modal.
+- `ProfileModal` — bottom-sheet on mobile, centered card on desktop. Cover strip, overlapping avatar, markdown bio via `marked`, family mini-avatars (parents / siblings / children) that navigate to each other. **Editar** swaps the body for `EditForm`.
+- `EditForm` — edits a member; sends only changed fields.
+- `CodeDialog` — asks for and verifies an edit code.
+- `App` — loads members, owns `selected` and the edit session (`{ code, editor }` in `localStorage`), wires tree ↔ modal ↔ API.

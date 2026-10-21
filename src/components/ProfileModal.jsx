@@ -1,6 +1,7 @@
-import React, { useEffect } from 'react'
+import React, { useEffect, useState } from 'react'
 import { marked } from 'marked'
-import { nameToGradient, initials, yearsDisplay } from '../utils/avatar.js'
+import { nameToGradient, initials } from '../utils/avatar.js'
+import EditForm from './EditForm.jsx'
 
 marked.setOptions({ breaks: true })
 
@@ -9,11 +10,12 @@ function Avatar({ member, size = 48, onClick, ring = false }) {
     <button
       onClick={onClick}
       className={[
-        'rounded-full overflow-hidden shrink-0 transition-all duration-150',
+        // block: as an inline element it gets a text-baseline gap below, making the frame around it oval
+        'block rounded-full overflow-hidden shrink-0 transition-all duration-150',
         ring ? 'ring-2 ring-white' : '',
         onClick ? 'hover:scale-105 hover:ring-2 hover:ring-violet-400 cursor-pointer' : 'cursor-default',
       ].join(' ')}
-      style={{ width: size, height: size, background: nameToGradient(member.name) }}
+      style={{ width: size, height: size, background: member.photo ? '#fff' : nameToGradient(member.name) }}
     >
       {member.photo ? (
         <img src={member.photo} alt={member.name} className="w-full h-full object-cover" draggable={false} />
@@ -43,22 +45,26 @@ function RelSection({ title, people, onNavigate }) {
   )
 }
 
-export default function ProfileModal({ member, allMembers, onClose, onNavigate }) {
+export default function ProfileModal({ member, allMembers, onClose, onNavigate, requireSession, onSave, onUpload }) {
+  const [editing, setEditing] = useState(false)
+  useEffect(() => setEditing(false), [member.id])
+
   const byId = Object.fromEntries(allMembers.map(m => [m.id, m]))
   const parents  = (member.parents ?? []).map(id => byId[id]).filter(Boolean)
   const children = allMembers.filter(m => (m.parents ?? []).includes(member.id))
   const siblings = allMembers.filter(m =>
     m.id !== member.id && (m.parents ?? []).some(p => (member.parents ?? []).includes(p))
   )
-  const years = yearsDisplay(member)
+  const dates = [member.born && `Nació ${member.born}`, member.died && `Falleció ${member.died}`].filter(Boolean).join(' · ')
   const bioHtml = member.bio ? marked.parse(member.bio) : null
   const hasFamily = parents.length || children.length || siblings.length
 
   useEffect(() => {
-    const h = e => e.key === 'Escape' && onClose()
+    // Escape only closes when nothing is stacked on top (code dialog) and no edit is in progress
+    const h = e => e.key === 'Escape' && !editing && !document.querySelector('[data-code-dialog]') && onClose()
     window.addEventListener('keydown', h)
     return () => window.removeEventListener('keydown', h)
-  }, [onClose])
+  }, [onClose, editing])
 
   return (
     <div
@@ -71,15 +77,17 @@ export default function ProfileModal({ member, allMembers, onClose, onNavigate }
       {/* Sheet / card */}
       <div className="relative z-10 w-full sm:max-w-md bg-white rounded-t-3xl sm:rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[92vh] animate-[slideUp_0.22s_ease]">
 
-        {/* Cover strip */}
+        {/* Cover: a soft blur of the photo (a wide crop of a portrait looks random), else the gradient */}
         <div
-          className="relative shrink-0 h-28"
-          style={{ background: nameToGradient(member.name) }}
+          className="relative shrink-0 h-24 overflow-hidden"
+          style={member.photo ? undefined : { background: nameToGradient(member.name) }}
         >
           {member.photo && (
-            <img src={member.photo} alt="" className="absolute inset-0 w-full h-full object-cover object-top opacity-60" draggable={false} />
+            <>
+              <img src={member.photo} alt="" className="absolute inset-0 w-full h-full object-cover scale-150 blur-2xl saturate-150" draggable={false} />
+              <div className="absolute inset-0 bg-white/20" />
+            </>
           )}
-          <div className="absolute inset-0 bg-gradient-to-b from-black/10 to-black/30" />
 
           <button
             onClick={onClose}
@@ -92,20 +100,41 @@ export default function ProfileModal({ member, allMembers, onClose, onNavigate }
           </button>
         </div>
 
-        {/* Scrollable body */}
-        <div className="overflow-y-auto flex-1">
-
-          {/* Profile header */}
-          <div className="px-5 pb-4">
-            <div className="-mt-10 mb-3 flex items-end justify-between">
-              <Avatar member={member} size={80} ring />
+        {/* Profile header — outside the scroll area so the overlapping avatar isn't clipped,
+            and stacked (relative z-10) above the positioned cover, which would otherwise paint over it */}
+        <div className="relative z-10 shrink-0 px-5 pb-4 border-b border-gray-100">
+          <div className="-mt-12 mb-3 flex items-end justify-between">
+            <div className="shrink-0 rounded-full p-1 bg-white shadow-md">
+              <Avatar member={member} size={96} />
             </div>
-            <h2 className="text-xl font-bold text-gray-900 leading-tight">{member.name}</h2>
-            {years && <p className="text-sm text-gray-500 mt-0.5 tabular-nums">{years}</p>}
+            {!editing && (
+              <button
+                onClick={() => requireSession().then(() => setEditing(true))}
+                className="px-3 py-1.5 rounded-full text-sm font-medium text-violet-600 bg-violet-50 hover:bg-violet-100"
+              >
+                Editar
+              </button>
+            )}
           </div>
+          <h2 className="text-xl font-bold text-gray-900 leading-tight">{member.name}</h2>
+          {dates && <p className="text-sm text-gray-500 mt-0.5 tabular-nums">{dates}</p>}
+        </div>
+
+        {/* Scrollable body */}
+        <div className="overflow-y-auto flex-1 pt-4">
+
+          {editing && (
+            <EditForm
+              member={member}
+              allMembers={allMembers}
+              onCancel={() => setEditing(false)}
+              onSave={async changes => { await onSave(member.id, changes); setEditing(false) }}
+              onUpload={data => onUpload(member.id, data)}
+            />
+          )}
 
           {/* Bio */}
-          {bioHtml && (
+          {!editing && bioHtml && (
             <div
               className="px-5 pb-5 prose prose-sm prose-gray max-w-none text-gray-700"
               dangerouslySetInnerHTML={{ __html: bioHtml }}
@@ -113,8 +142,8 @@ export default function ProfileModal({ member, allMembers, onClose, onNavigate }
           )}
 
           {/* Family connections */}
-          {hasFamily && (
-            <div className="border-t border-gray-100 px-5 py-5">
+          {!editing && hasFamily && (
+            <div className={`px-5 pb-5 ${bioHtml ? 'pt-5 border-t border-gray-100' : ''}`}>
               <RelSection title="Parents"  people={parents}  onNavigate={onNavigate} />
               <RelSection title="Siblings" people={siblings} onNavigate={onNavigate} />
               <RelSection title="Children" people={children} onNavigate={onNavigate} />

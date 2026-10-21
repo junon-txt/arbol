@@ -12,8 +12,13 @@ export function initials(name) {
   return name.split(' ').slice(0, 2).map(w => w[0]).join('').toUpperCase()
 }
 
+// Dates come from the sheet as free text ("07/03/1993", "02/04", "2 de marzo?"); show years when present
+const year = d => String(d ?? '').match(/\b(1[89]|20)\d{2}\b/)?.[0]
+
 export function yearsDisplay(m) {
-  if (m.born && m.died) return `${m.born}–${m.died}`
-  if (m.born) return `${m.born}–`
-  return m.years ?? ''
+  const b = year(m.born), d = year(m.died)
+  if (b && d) return `${b}–${d}`
+  if (d) return `†${d}`
+  if (b) return m.died ? `${b}–?` : b
+  return m.died ? '†' : ''
 }
