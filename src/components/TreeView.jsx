@@ -137,9 +137,10 @@ export default function TreeView({ members, lines, selected, onSelect }) {
 
       {/* HUD — zoom buttons */}
       <div className="absolute bottom-5 right-5 flex flex-col gap-1.5">
-        {[['＋', 1.2], ['－', 1 / 1.2]].map(([label, factor]) => (
+        {[['＋', 1.2, 'Acercar'], ['－', 1 / 1.2, 'Alejar']].map(([label, factor, name]) => (
           <button
             key={label}
+            aria-label={name}
             onClick={() => setTf(t => ({ ...t, scale: Math.min(3, Math.max(0.2, t.scale * factor)) }))}
             className="w-9 h-9 rounded-xl bg-white border border-gray-200 shadow-sm text-gray-500 hover:bg-gray-50 hover:text-gray-800 transition-colors flex items-center justify-center text-base font-medium"
           >
@@ -149,8 +150,8 @@ export default function TreeView({ members, lines, selected, onSelect }) {
       </div>
 
       {/* HUD — hint */}
-      <p className="absolute bottom-5 left-5 text-xs text-gray-400 bg-white/70 backdrop-blur px-3 py-1.5 rounded-lg border border-gray-100 shadow-sm">
-        Scroll to zoom · drag to pan · tap a portrait
+      <p className="absolute bottom-5 left-5 max-w-[calc(100%-6rem)] text-xs text-gray-400 bg-white/70 backdrop-blur px-3 py-1.5 rounded-lg border border-gray-100 shadow-sm">
+        Scrolleá para hacer zoom · Arrastrá para navegar · Tocá un perfil para ver más
       </p>
     </div>
   )

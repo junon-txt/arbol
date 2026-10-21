@@ -92,7 +92,7 @@ export default function ProfileModal({ member, allMembers, onClose, onNavigate, 
           <button
             onClick={onClose}
             className="absolute top-3 right-3 w-8 h-8 rounded-full bg-black/30 hover:bg-black/50 text-white flex items-center justify-center transition-colors"
-            aria-label="Close"
+            aria-label="Cerrar"
           >
             <svg viewBox="0 0 14 14" className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
               <path d="M1 1l12 12M13 1L1 13" />
@@ -144,9 +144,9 @@ export default function ProfileModal({ member, allMembers, onClose, onNavigate, 
           {/* Family connections */}
           {!editing && hasFamily && (
             <div className={`px-5 pb-5 ${bioHtml ? 'pt-5 border-t border-gray-100' : ''}`}>
-              <RelSection title="Parents"  people={parents}  onNavigate={onNavigate} />
-              <RelSection title="Siblings" people={siblings} onNavigate={onNavigate} />
-              <RelSection title="Children" people={children} onNavigate={onNavigate} />
+              <RelSection title="Padres"   people={parents}  onNavigate={onNavigate} />
+              <RelSection title="Hermanos" people={siblings} onNavigate={onNavigate} />
+              <RelSection title="Hijos"    people={children} onNavigate={onNavigate} />
             </div>
           )}
         </div>
